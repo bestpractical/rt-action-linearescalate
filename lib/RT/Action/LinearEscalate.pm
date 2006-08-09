@@ -1,0 +1,204 @@
+# BEGIN BPS TAGGED BLOCK {{{
+#
+# COPYRIGHT:
+#
+# This software is Copyright (c) 1996-2006 Best Practical Solutions, LLC
+#                                          <jesse@bestpractical.com>
+#
+# (Except where explicitly superseded by other copyright notices)
+#
+#
+# LICENSE:
+#
+# This work is made available to you under the terms of Version 2 of
+# the GNU General Public License. A copy of that license should have
+# been provided with this software, but in any event can be snarfed
+# from www.gnu.org.
+#
+# This work is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+# CONTRIBUTION SUBMISSION POLICY:
+#
+# (The following paragraph is not intended to limit the rights granted
+# to you to modify and distribute this software under the terms of
+# the GNU General Public License and is only of importance to you if
+# you choose to contribute your changes and enhancements to the
+# community by submitting them to Best Practical Solutions, LLC.)
+#
+# By intentionally submitting any modifications, corrections or
+# derivatives to this work, or any other work intended for use with
+# Request Tracker, to Best Practical Solutions, LLC, you confirm that
+# you are the copyright holder for those contributions and you grant
+# Best Practical Solutions,  LLC a nonexclusive, worldwide, irrevocable,
+# royalty-free, perpetual, license to use, copy, create derivative
+# works based on those contributions, and sublicense and distribute
+# those contributions and any derivatives thereof.
+#
+# END BPS TAGGED BLOCK }}}
+
+=head1 NAME
+
+  RT::Action::LinearEscalate
+
+=head1 DESCRIPTION
+
+LinearEscalate is a ScripAction which is NOT intended to be called
+per transaction. It's intended to be called by an RT escalation tool.
+One such tool is called rt-crontool and is located in $RTHOME/bin (see
+C<rt-crontool -h> for more details)
+
+This ScripAction will move a ticket's priority from its initial priority to
+its final priority linearly as the ticket approaches its due date. 
+
+This ScripAction uses RT's internal Ticket::_Set call to set ticket
+priority without running scrips or recording a transaction on each
+update. 
+
+To install this package:
+
+ # perl Makefile.PL
+ # make install
+
+Once the ScripAction is installed, the following script in "cron" 
+will get tickets to where they need to be:
+
+ rt-crontool --search RT::Search::FromSQL --search-arg \
+    "(Status='new' OR Status='open' OR Status = 'stalled')" \
+    --action RT::Action::LinearEscalate
+
+
+=cut
+
+package RT::Action::LinearEscalate;
+require RT::Action::Generic;
+
+use strict;
+use base qw(RT::Action::Generic);
+
+our $VERSION = '0.01';
+$RT::EscalateSilently = 1;
+
+
+#Do what we need to do and send it out.
+
+#What does this type of Action does
+
+# {{{ sub Describe
+sub Describe {
+    my $self = shift;
+    return (
+        ref $self
+          . " will move a ticket's priority toward its final priority." );
+}
+
+# }}}
+
+# {{{ sub Prepare
+
+sub _Priority {
+    my $self = shift;
+    return $self->TicketObj->Priority;
+}
+
+
+sub _InitialPriority {
+    my $self = shift;
+    return $self->TicketObj->InitialPriority;
+}
+
+
+sub _FinalPriority {
+    my $self = shift;
+    return $self->TicketObj->FinalPriority;
+}
+
+
+
+
+
+
+sub _CreatedAsEpoch {
+    my $self = shift;
+    return $self->TicketObj->CreatedObj->Unix;
+}
+sub _DueAsEpoch {
+    my $self = shift;
+    return $self->TicketObj->DueObj->Unix;
+}
+
+sub _Now {
+    return time();
+}
+
+sub Prepare {
+    my $self = shift;
+    if ( $self->_Priority()  >= $self->_FinalPriority() ) {
+        # no update necessary.
+        return 0;
+    }
+
+    #compute the number of business days until the ticket is due
+
+    # If we don't have a due date, get out
+    if ( $self->_DueAsEpoch < 1 ) {
+        return (0);
+    }
+
+
+
+    #    now we know we have a due date. for every day that passes,
+    #    increment priority according to the formula
+
+    my $standard_range = $self->_FinalPriority() - $self->_InitialPriority();
+    my $due           = $self->_DueAsEpoch; 
+    my $created       = $self->_CreatedAsEpoch;
+    my $now           = $self->_Now();
+   
+    my $percent_complete = ($now-$created)/($due - $created);
+    my $new_priority = int($percent_complete * $standard_range) + $self->_InitialPriority();
+
+	$new_priority = $self->_FinalPriority if ($new_priority>$self->_FinalPriority);
+    # if the priority hasn't changed do nothing
+    if ( $self->_Priority == $new_priority ) {
+        return 0;
+    }
+
+
+    $self->{'prio'} = $new_priority;
+
+    return 1;
+}
+
+# }}}
+
+sub Commit {
+    my $self = shift;
+    my ( $val, $msg );
+    if ($RT::EscalateSilently) {
+        ( $val, $msg ) = $self->TicketObj->_Set( Field => 'Priority',
+                                                 Value => $self->{'prio'},
+                                                 RecordTransaction => 0,
+                                                );
+    }
+    else {
+        ( $val, $msg ) = $self->TicketObj->SetPriority( $self->{'prio'} );
+    }
+    unless ($val) {
+        $RT::Logger->debug( $self . " $msg\n" );
+    }
+}
+
+eval "require RT::Action::LinearEscalate_Vendor";
+die $@ if ( $@ && $@ !~ qr{^Can't locate RT/Action/LinearEscalate_Vendor.pm} );
+eval "require RT::Action::LinearEscalate_Local";
+die $@ if ( $@ && $@ !~ qr{^Can't locate RT/Action/LinearEscalate_Local.pm} );
+
+1;

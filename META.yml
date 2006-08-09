@@ -1,0 +1,10 @@
+abstract: RT Action-LinearEscalate Extension
+distribution_type: module
+generated_by: Module::Install version 0.61
+license: unknown
+name: RT-Action-LinearEscalate
+no_index: 
+  directory: 
+    - inc
+    - t
+version: 0.01
