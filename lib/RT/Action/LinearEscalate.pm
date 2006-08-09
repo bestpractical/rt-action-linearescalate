@@ -74,6 +74,15 @@ will get tickets to where they need to be:
     "(Status='new' OR Status='open' OR Status = 'stalled')" \
     --action RT::Action::LinearEscalate
 
+LinearEscalate's behavior can be controlled by two configuration options
+set in RT_SiteConfig.pm -- LinearEscalate_RecordTransaction, which 
+defaults to false and causes the tool to create a transaction on the 
+ticket when it is escalated, and LinearEscalate_UpdateLastUpdated, which 
+defaults to true and updates the LastUpdated field when the ticket is 
+escalated.  You cannot set LinearEscalate_UpdateLastUpdated to false 
+unless LinearEscalate_RecordTransaction is also false.  (Well, you can,
+but we'll just ignore you.)
+
 
 =cut
 
@@ -84,8 +93,13 @@ use strict;
 use base qw(RT::Action::Generic);
 
 our $VERSION = '0.01';
-$RT::EscalateSilently = 1;
 
+my $RecordTransaction = ( defined $RT::LinearEscalate_RecordTransaction 
+                            ? $RT::LinearEscalate_RecordTransaction : 0 
+                        );
+my $UpdateLastUpdated = ( defined $RT::LinearEscalate_UpdateLastUpdated 
+                            ? $RT::LinearEscalate_UpdateLastUpdated : 1
+                        );
 
 #Do what we need to do and send it out.
 
@@ -182,11 +196,28 @@ sub Prepare {
 sub Commit {
     my $self = shift;
     my ( $val, $msg );
-    if ($RT::EscalateSilently) {
-        ( $val, $msg ) = $self->TicketObj->_Set( Field => 'Priority',
-                                                 Value => $self->{'prio'},
-                                                 RecordTransaction => 0,
-                                                );
+
+    #testing purposes only, it's a dirty ugly hack
+    $self->Argument =~ /RecordTransaction:(\d); UpdateLastUpdated:(\d)/;
+    $RecordTransaction = (defined $1 ? $1 : $RecordTransaction);
+    $UpdateLastUpdated = (defined $2 ? $2 : $UpdateLastUpdated);
+    $RT::Logger->warning("Overrode RecordTransaction: $RecordTransaction") 
+        if defined $1;
+    $RT::Logger->warning("Overrode UpdateLastUpdated: $UpdateLastUpdated") 
+        if defined $2;
+
+    unless ($RecordTransaction) {
+        unless ($UpdateLastUpdated) {
+            ( $val, $msg ) = $self->TicketObj->__Set( Field => 'Priority',
+                                                      Value => $self->{'prio'},
+                                                     );
+        }
+        else {
+            ( $val, $msg ) = $self->TicketObj->_Set( Field => 'Priority',
+                                                     Value => $self->{'prio'},
+                                                     RecordTransaction => 0,
+                                                    );
+        }
     }
     else {
         ( $val, $msg ) = $self->TicketObj->SetPriority( $self->{'prio'} );
