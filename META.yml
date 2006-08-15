@@ -7,4 +7,4 @@ no_index:
   directory: 
     - inc
     - t
-version: 0.01
+version: 0.03
