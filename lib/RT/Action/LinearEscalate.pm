@@ -198,13 +198,14 @@ sub Commit {
     my ( $val, $msg );
 
     #testing purposes only, it's a dirty ugly hack
-    $self->Argument =~ /RecordTransaction:(\d); UpdateLastUpdated:(\d)/;
-    $RecordTransaction = (defined $1 ? $1 : $RecordTransaction);
-    $UpdateLastUpdated = (defined $2 ? $2 : $UpdateLastUpdated);
-    $RT::Logger->warning("Overrode RecordTransaction: $RecordTransaction") 
-        if defined $1;
-    $RT::Logger->warning("Overrode UpdateLastUpdated: $UpdateLastUpdated") 
-        if defined $2;
+    if ($self->Argument =~ /RecordTransaction:(\d); UpdateLastUpdated:(\d)/) {
+        $RecordTransaction = (defined $1 ? $1 : $RecordTransaction);
+        $UpdateLastUpdated = (defined $2 ? $2 : $UpdateLastUpdated);
+        $RT::Logger->warning("Overrode RecordTransaction: $RecordTransaction") 
+            if defined $1;
+        $RT::Logger->warning("Overrode UpdateLastUpdated: $UpdateLastUpdated") 
+            if defined $2;
+    }
 
     unless ($RecordTransaction) {
         unless ($UpdateLastUpdated) {
