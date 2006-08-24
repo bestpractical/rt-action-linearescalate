@@ -92,7 +92,7 @@ require RT::Action::Generic;
 use strict;
 use base qw(RT::Action::Generic);
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 my $RecordTransaction = ( defined $RT::LinearEscalate_RecordTransaction 
                             ? $RT::LinearEscalate_RecordTransaction : 0 
