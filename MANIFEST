@@ -13,3 +13,4 @@ MANIFEST			This list of files
 META.yml
 README
 t/escalate_test.t
+t/workflow.t
