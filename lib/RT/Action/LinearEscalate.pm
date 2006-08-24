@@ -207,24 +207,26 @@ sub Commit {
             if defined $2;
     }
 
-    unless ($RecordTransaction) {
-        unless ($UpdateLastUpdated) {
-            ( $val, $msg ) = $self->TicketObj->__Set( Field => 'Priority',
-                                                      Value => $self->{'prio'},
-                                                     );
+    if ($self->TicketObj->Priority < $self->{'prio'}) {
+        unless ($RecordTransaction) {
+            unless ($UpdateLastUpdated) {
+                ( $val, $msg ) = $self->TicketObj->__Set( Field => 'Priority',
+                                                          Value => $self->{'prio'},
+                                                         );
+            }
+            else {
+                ( $val, $msg ) = $self->TicketObj->_Set( Field => 'Priority',
+                                                         Value => $self->{'prio'},
+                                                         RecordTransaction => 0,
+                                                        );
+            }
         }
         else {
-            ( $val, $msg ) = $self->TicketObj->_Set( Field => 'Priority',
-                                                     Value => $self->{'prio'},
-                                                     RecordTransaction => 0,
-                                                    );
+            ( $val, $msg ) = $self->TicketObj->SetPriority( $self->{'prio'} );
         }
-    }
-    else {
-        ( $val, $msg ) = $self->TicketObj->SetPriority( $self->{'prio'} );
-    }
-    unless ($val) {
-        $RT::Logger->debug( $self . " $msg\n" );
+        unless ($val) {
+            $RT::Logger->debug( $self . " $msg\n" );
+        }
     }
 }
 
