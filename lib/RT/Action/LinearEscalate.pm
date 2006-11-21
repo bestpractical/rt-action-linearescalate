@@ -92,7 +92,7 @@ require RT::Action::Generic;
 use strict;
 use base qw(RT::Action::Generic);
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 my $RecordTransaction = ( defined $RT::LinearEscalate_RecordTransaction 
                             ? $RT::LinearEscalate_RecordTransaction : 0 
@@ -175,7 +175,10 @@ sub Prepare {
     my $due           = $self->_DueAsEpoch; 
     my $created       = $self->_CreatedAsEpoch;
     my $now           = $self->_Now();
-   
+
+    $due = $created + 1 if ($due <= $created); # +1 to avoid div by zero
+
+
     my $percent_complete = ($now-$created)/($due - $created);
     my $new_priority = int($percent_complete * $standard_range) + $self->_InitialPriority();
 
@@ -209,6 +212,13 @@ sub Commit {
 
     if ($self->TicketObj->Priority < $self->{'prio'}) {
         unless ($RecordTransaction) {
+
+        $RT::Logger->warning( "Updating priority of ticket",
+                              $self->TicketObj->Id,
+                              "from", $self->_Priority(),
+                              "to", $self->{'prio'} );
+
+
             unless ($UpdateLastUpdated) {
                 ( $val, $msg ) = $self->TicketObj->__Set( Field => 'Priority',
                                                           Value => $self->{'prio'},
