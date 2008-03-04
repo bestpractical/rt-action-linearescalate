@@ -153,24 +153,31 @@ sub Commit {
     # if the priority hasn't changed do nothing
     return 1 if $ticket->Priority == $new_value;
 
-    # testing purposes only, it's a dirty ugly hack
-    if ( $self->Argument =~ /RecordTransaction:(\d); UpdateLastUpdated:(\d)/ ) {
-        $RecordTransaction = (defined $1 ? $1 : $RecordTransaction);
-        $UpdateLastUpdated = (defined $2 ? $2 : $UpdateLastUpdated);
-        $RT::Logger->warning("Overrode RecordTransaction: $RecordTransaction") 
-            if defined $1;
-        $RT::Logger->warning("Overrode UpdateLastUpdated: $UpdateLastUpdated") 
-            if defined $2;
+    # override defaults from argument
+    my ($record, $update) = ($RecordTransaction, $UpdateLastUpdated);
+    {
+        my $arg = $self->Argument || '';
+        if ( $arg =~ /RecordTransaction:\s*(\d+)/i ) {
+            $record = $1;
+            $RT::Logger->debug("Overrode RecordTransaction: $record");
+        } 
+        if ( $arg =~ /UpdateLastUpdated:\s*(\d+)/i ) {
+            $update = $1;
+            $RT::Logger->debug("Overrode UpdateLastUpdated: $update");
+        }
+        $update = 1 if $record;
     }
 
     $RT::Logger->debug(
         'Linearly escalating priority of ticket #'. $ticket->Id
         .' from '. $ticket->Priority .' to '. $new_value
+        .' and'. ($record? '': ' do not') .' record a transaction'
+        .' and'. ($update? '': ' do not') .' touch last updated field'
     );
 
     my ( $val, $msg );
-    unless ( $RecordTransaction ) {
-        unless ($UpdateLastUpdated) {
+    unless ( $record ) {
+        unless ( $update ) {
             ( $val, $msg ) = $ticket->__Set(
                 Field => 'Priority',
                 Value => $new_value,
