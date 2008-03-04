@@ -128,15 +128,18 @@ sub Prepare {
     # now we know we have a due date. for every day that passes,
     # increment priority according to the formula
 
-    my $standard_range = $ticket->FinalPriority - $ticket->InitialPriority;
-    my $created        = $ticket->CreatedObj->Unix;
+    my $starts         = $ticket->StartsObj->Unix;
+    $starts            = $ticket->CreatedObj->Unix unless $starts > 0;
     my $now            = time;
 
-    $due = $created + 1 if $due <= $created; # +1 to avoid div by zero
+    # do nothing if we didn't reach starts or created date
+    return 1 if $starts < $now;
 
-    my $percent_complete = ($now-$created)/($due - $created);
+    $due = $starts + 1 if $due <= $starts; # +1 to avoid div by zero
 
-    my $new_priority = int($percent_complete * $standard_range) + $ticket->InitialPriority;
+    my $percent_complete = ($now-$starts)/($due - $starts);
+
+    my $new_priority = int($percent_complete * $priority_range) + $ticket->InitialPriority;
 	$new_priority = $ticket->FinalPriority if $new_priority > $ticket->FinalPriority;
     $self->{'new_priority'} = $new_priority;
 
