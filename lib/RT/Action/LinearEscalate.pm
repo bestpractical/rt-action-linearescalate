@@ -46,21 +46,21 @@
 
 =head1 NAME
 
-  RT::Action::LinearEscalate
+RT::Action::LinearEscalate - will move a ticket's priority toward its
+final priority.
 
 =head1 DESCRIPTION
 
-LinearEscalate is a ScripAction which is NOT intended to be called
-per transaction. It's intended to be called by an RT escalation tool.
-One such tool is called rt-crontool and is located in $RTHOME/bin (see
-C<rt-crontool -h> for more details)
+LinearEscalate is a ScripAction that will move a ticket's priority
+from its initial priority to its final priority linearly as
+the ticket approaches its due date.
 
-This ScripAction will move a ticket's priority from its initial priority to
-its final priority linearly as the ticket approaches its due date. 
+It's intended to be called by an RT escalation tool. One such tool is called
+rt-crontool and is located in $RTHOME/bin (see C<rt-crontool -h> for more details).
 
 This ScripAction uses RT's internal Ticket::_Set call to set ticket
 priority without running scrips or recording a transaction on each
-update. 
+update.
 
 To install this package:
 
@@ -82,7 +82,6 @@ defaults to true and updates the LastUpdated field when the ticket is
 escalated.  You cannot set LinearEscalate_UpdateLastUpdated to false 
 unless LinearEscalate_RecordTransaction is also false.  (Well, you can,
 but we'll just ignore you.)
-
 
 =cut
 
@@ -107,9 +106,8 @@ my $UpdateLastUpdated = ( defined $RT::LinearEscalate_UpdateLastUpdated
 
 sub Describe {
     my $self = shift;
-    return (
-        ref $self
-          . " will move a ticket's priority toward its final priority." );
+    my $class = ref($self) || $self;
+    return "$class will move a ticket's priority toward its final priority.";
 }
 
 sub Prepare {
