@@ -87,7 +87,6 @@ but we'll just ignore you.)
 =cut
 
 package RT::Action::LinearEscalate;
-require RT::Action::Generic;
 
 use strict;
 use warnings;
@@ -119,14 +118,14 @@ sub Prepare {
     my $ticket = $self->TicketObj;
     if ( $ticket->Priority >= $ticket->FinalPriority ) {
         # no update necessary.
-        return 0;
+        return 1;
     }
 
-    #compute the number of business days until the ticket is due
+    # TODO: compute the number of business days until the ticket is due
 
     # If we don't have a due date, get out
-    my $due = $ticket->DueObj->Unix; 
-    return 0 unless $due > 0;
+    my $due = $ticket->DueObj->Unix;
+    return 1 unless $due > 0;
 
     # now we know we have a due date. for every day that passes,
     # increment priority according to the formula
@@ -141,27 +140,23 @@ sub Prepare {
 
     my $new_priority = int($percent_complete * $standard_range) + $ticket->InitialPriority;
 	$new_priority = $ticket->FinalPriority if $new_priority > $ticket->FinalPriority;
-    # if the priority hasn't changed do nothing
-    if ( $ticket->Priority == $new_priority ) {
-        return 0;
-    }
-
     $self->{'new_priority'} = $new_priority;
 
     return 1;
 }
 
-# }}}
-
 sub Commit {
     my $self = shift;
 
-    my $ticket = $ticket->TicketObj;
+    my $new_value = $self->{'new_priority'};
+    return 1 unless defined $new_value;
 
-    my ( $val, $msg );
+    my $ticket = $self->TicketObj;
+    # if the priority hasn't changed do nothing
+    return 1 if $ticket->Priority == $new_value;
 
-    #testing purposes only, it's a dirty ugly hack
-    if ($self->Argument =~ /RecordTransaction:(\d); UpdateLastUpdated:(\d)/) {
+    # testing purposes only, it's a dirty ugly hack
+    if ( $self->Argument =~ /RecordTransaction:(\d); UpdateLastUpdated:(\d)/ ) {
         $RecordTransaction = (defined $1 ? $1 : $RecordTransaction);
         $UpdateLastUpdated = (defined $2 ? $2 : $UpdateLastUpdated);
         $RT::Logger->warning("Overrode RecordTransaction: $RecordTransaction") 
@@ -170,34 +165,36 @@ sub Commit {
             if defined $2;
     }
 
-    if ( $ticket->Priority < $self->{'prio'} ) {
-        unless ($RecordTransaction) {
+    $RT::Logger->debug(
+        'Linearly escalating priority of ticket #'. $ticket->Id
+        .' from '. $ticket->Priority .' to '. $new_value
+    );
 
-        $RT::Logger->warning( "Updating priority of ticket",
-                              $ticket->Id,
-                              "from", $ticket->Priority,
-                              "to", $self->{'prio'} );
-
-
-            unless ($UpdateLastUpdated) {
-                ( $val, $msg ) = $ticket->__Set( Field => 'Priority',
-                                                          Value => $self->{'prio'},
-                                                         );
-            }
-            else {
-                ( $val, $msg ) = $ticket->_Set( Field => 'Priority',
-                                                         Value => $self->{'prio'},
-                                                         RecordTransaction => 0,
-                                                        );
-            }
+    my ( $val, $msg );
+    unless ( $RecordTransaction ) {
+        unless ($UpdateLastUpdated) {
+            ( $val, $msg ) = $ticket->__Set(
+                Field => 'Priority',
+                Value => $new_value,
+            );
         }
         else {
-            ( $val, $msg ) = $ticket->SetPriority( $self->{'prio'} );
-        }
-        unless ($val) {
-            $RT::Logger->debug( $self . " $msg\n" );
+            ( $val, $msg ) = $ticket->_Set(
+                Field => 'Priority',
+                Value => $new_value,
+                RecordTransaction => 0,
+            );
         }
     }
+    else {
+        ( $val, $msg ) = $ticket->SetPriority( $new_value );
+    }
+
+    unless ($val) {
+        $RT::Logger->error( "Couldn't set new priority value: $msg" );
+        return (0, $msg);
+    }
+    return 1;
 }
 
 eval "require RT::Action::LinearEscalate_Vendor";
