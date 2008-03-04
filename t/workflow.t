@@ -5,6 +5,8 @@ use warnings;
 
 use Test::More tests => 18;
 
+use lib qw(./lib /opt/rt3/local/lib /opt/rt3/lib);
+
 use RT;
 RT::LoadConfig;
 RT::Init;
@@ -90,7 +92,7 @@ sub escalate_ticket_ok {
     my $ticket = shift;
     my $id = $ticket->id;
     print "rt-crontool --search RT::Search::FromSQL --search-arg \"id = @{[$id]}\" --action RT::Action::LinearEscalate --action-arg \"RecordTransaction:$RecordTransaction; UpdateLastUpdated:$UpdateLastUpdated\"\n";
-    print STDERR `rt-crontool --search RT::Search::FromSQL --search-arg "id = @{[$id]}" --action RT::Action::LinearEscalate --action-arg "RecordTransaction:$RecordTransaction; UpdateLastUpdated:$UpdateLastUpdated"`;
+    print STDERR `/opt/rt3/bin/rt-crontool --search RT::Search::FromSQL --search-arg "id = @{[$id]}" --action RT::Action::LinearEscalate --action-arg "RecordTransaction:$RecordTransaction; UpdateLastUpdated:$UpdateLastUpdated"`;
 
     $ticket->Load($id);     # reload, because otherwise we get the cached value
     ok( $ticket->Priority != 0, "Escalated ticket" );

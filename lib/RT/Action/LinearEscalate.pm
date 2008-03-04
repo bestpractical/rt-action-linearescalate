@@ -58,30 +58,56 @@ the ticket approaches its due date.
 It's intended to be called by an RT escalation tool. One such tool is called
 rt-crontool and is located in $RTHOME/bin (see C<rt-crontool -h> for more details).
 
-This ScripAction uses RT's internal Ticket::_Set call to set ticket
-priority without running scrips or recording a transaction on each
-update.
+=head1 INSTALLATION
 
-To install this package:
+To install this package run:
 
- # perl Makefile.PL
- # make install
+    perl Makefile.PL
+    make install
+
+=head1 CONFIGURATION
 
 Once the ScripAction is installed, the following script in "cron" 
 will get tickets to where they need to be:
 
- rt-crontool --search RT::Search::FromSQL --search-arg \
+    rt-crontool --search RT::Search::FromSQL --search-arg \
     "(Status='new' OR Status='open' OR Status = 'stalled')" \
     --action RT::Action::LinearEscalate
 
-LinearEscalate's behavior can be controlled by two configuration options
-set in RT_SiteConfig.pm -- LinearEscalate_RecordTransaction, which 
-defaults to false and causes the tool to create a transaction on the 
-ticket when it is escalated, and LinearEscalate_UpdateLastUpdated, which 
-defaults to true and updates the LastUpdated field when the ticket is 
-escalated.  You cannot set LinearEscalate_UpdateLastUpdated to false 
-unless LinearEscalate_RecordTransaction is also false.  (Well, you can,
-but we'll just ignore you.)
+LinearEscalate's behavior can be controlled by two options:
+
+=over 4
+
+=item RecordTransaction - defaults to false and if option is true then
+causes the tool to create a transaction on the ticket when it is escalated.
+
+=item UpdateLastUpdated - which defaults to true and updates the LastUpdated
+field when the ticket is escalated, otherwise don't touch anything.
+
+=back
+
+You cannot set "UpdateLastUpdated" to false unless "RecordTransaction"
+is also false. Well, you can, but we'll just ignore you.
+
+You can set this options using either in F<RT_SiteConfig.pm>, as action
+argument in call to the rt-crontool or in DB if you want to use the action
+in scrips.
+
+You should prefix options with C<LinearEscalate_> in the config:
+
+    Set( $LinearEscalate_RecordTransaction, 1 );
+    Set( $LinearEscalate_UpdateLastUpdated, 1 );
+
+From a shell you can use the following command:
+
+    rt-crontool --search RT::Search::FromSQL --search-arg \
+    "(Status='new' OR Status='open' OR Status = 'stalled')" \
+    --action RT::Action::LinearEscalate \
+    --action-arg "RecordTransaction: 1"
+
+This ScripAction uses RT's internal RT::Ticket::_Set call to set ticket
+priority without running scrips or recording a transaction on each
+update.
 
 =cut
 
@@ -115,19 +141,24 @@ sub Prepare {
 
     my $ticket = $self->TicketObj;
 
-    # If we don't have a due date, get out
     my $due = $ticket->DueObj->Unix;
-    return 1 unless $due > 0;
+    unless ( $due > 0 ) {
+        $RT::Logger->debug('Due is not set. Not escalating.');
+        return 1;
+    }
 
     my $priority_range = $ticket->FinalPriority - $ticket->InitialPriority;
-    # equal or undefined
-    return 1 unless $priority_range;
+    unless ( $priority_range ) {
+        $RT::Logger->debug('Final and Initial priorities are equal. Not escalating.');
+        return 1;
+    }
 
     if ( $ticket->Priority >= $ticket->FinalPriority && $priority_range > 0 ) {
-        # no update necessary.
+        $RT::Logger->debug('Current priority is greater than final. Not escalating.');
         return 1;
     }
     elsif ( $ticket->Priority <= $ticket->FinalPriority && $priority_range < 0 ) {
+        $RT::Logger->debug('Current priority is lower than final. Not escalating.');
         return 1;
     }
 
@@ -141,7 +172,10 @@ sub Prepare {
     my $now            = time;
 
     # do nothing if we didn't reach starts or created date
-    return 1 if $starts < $now;
+    if ( $starts > $now ) {
+        $RT::Logger->debug('Starts(Created) is in future. Not escalating.');
+        return 1;
+    }
 
     $due = $starts + 1 if $due <= $starts; # +1 to avoid div by zero
 
