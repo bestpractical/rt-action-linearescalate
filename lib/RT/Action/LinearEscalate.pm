@@ -90,6 +90,7 @@ package RT::Action::LinearEscalate;
 require RT::Action::Generic;
 
 use strict;
+use warnings;
 use base qw(RT::Action::Generic);
 
 our $VERSION = '0.05';
@@ -105,7 +106,6 @@ my $UpdateLastUpdated = ( defined $RT::LinearEscalate_UpdateLastUpdated
 
 #What does this type of Action does
 
-# {{{ sub Describe
 sub Describe {
     my $self = shift;
     return (
@@ -113,48 +113,11 @@ sub Describe {
           . " will move a ticket's priority toward its final priority." );
 }
 
-# }}}
-
-# {{{ sub Prepare
-
-sub _Priority {
-    my $self = shift;
-    return $self->TicketObj->Priority;
-}
-
-
-sub _InitialPriority {
-    my $self = shift;
-    return $self->TicketObj->InitialPriority;
-}
-
-
-sub _FinalPriority {
-    my $self = shift;
-    return $self->TicketObj->FinalPriority;
-}
-
-
-
-
-
-
-sub _CreatedAsEpoch {
-    my $self = shift;
-    return $self->TicketObj->CreatedObj->Unix;
-}
-sub _DueAsEpoch {
-    my $self = shift;
-    return $self->TicketObj->DueObj->Unix;
-}
-
-sub _Now {
-    return time();
-}
-
 sub Prepare {
     my $self = shift;
-    if ( $self->_Priority()  >= $self->_FinalPriority() ) {
+
+    my $ticket = $self->TicketObj;
+    if ( $ticket->Priority >= $ticket->FinalPriority ) {
         # no update necessary.
         return 0;
     }
@@ -162,34 +125,28 @@ sub Prepare {
     #compute the number of business days until the ticket is due
 
     # If we don't have a due date, get out
-    if ( $self->_DueAsEpoch < 1 ) {
-        return (0);
-    }
+    my $due = $ticket->DueObj->Unix; 
+    return 0 unless $due > 0;
 
+    # now we know we have a due date. for every day that passes,
+    # increment priority according to the formula
 
+    my $standard_range = $ticket->FinalPriority - $ticket->InitialPriority;
+    my $created        = $ticket->CreatedObj->Unix;
+    my $now            = time;
 
-    #    now we know we have a due date. for every day that passes,
-    #    increment priority according to the formula
-
-    my $standard_range = $self->_FinalPriority() - $self->_InitialPriority();
-    my $due           = $self->_DueAsEpoch; 
-    my $created       = $self->_CreatedAsEpoch;
-    my $now           = $self->_Now();
-
-    $due = $created + 1 if ($due <= $created); # +1 to avoid div by zero
-
+    $due = $created + 1 if $due <= $created; # +1 to avoid div by zero
 
     my $percent_complete = ($now-$created)/($due - $created);
-    my $new_priority = int($percent_complete * $standard_range) + $self->_InitialPriority();
 
-	$new_priority = $self->_FinalPriority if ($new_priority>$self->_FinalPriority);
+    my $new_priority = int($percent_complete * $standard_range) + $ticket->InitialPriority;
+	$new_priority = $ticket->FinalPriority if $new_priority > $ticket->FinalPriority;
     # if the priority hasn't changed do nothing
-    if ( $self->_Priority == $new_priority ) {
+    if ( $ticket->Priority == $new_priority ) {
         return 0;
     }
 
-
-    $self->{'prio'} = $new_priority;
+    $self->{'new_priority'} = $new_priority;
 
     return 1;
 }
@@ -198,6 +155,9 @@ sub Prepare {
 
 sub Commit {
     my $self = shift;
+
+    my $ticket = $ticket->TicketObj;
+
     my ( $val, $msg );
 
     #testing purposes only, it's a dirty ugly hack
@@ -210,29 +170,29 @@ sub Commit {
             if defined $2;
     }
 
-    if ($self->TicketObj->Priority < $self->{'prio'}) {
+    if ( $ticket->Priority < $self->{'prio'} ) {
         unless ($RecordTransaction) {
 
         $RT::Logger->warning( "Updating priority of ticket",
-                              $self->TicketObj->Id,
-                              "from", $self->_Priority(),
+                              $ticket->Id,
+                              "from", $ticket->Priority,
                               "to", $self->{'prio'} );
 
 
             unless ($UpdateLastUpdated) {
-                ( $val, $msg ) = $self->TicketObj->__Set( Field => 'Priority',
+                ( $val, $msg ) = $ticket->__Set( Field => 'Priority',
                                                           Value => $self->{'prio'},
                                                          );
             }
             else {
-                ( $val, $msg ) = $self->TicketObj->_Set( Field => 'Priority',
+                ( $val, $msg ) = $ticket->_Set( Field => 'Priority',
                                                          Value => $self->{'prio'},
                                                          RecordTransaction => 0,
                                                         );
             }
         }
         else {
-            ( $val, $msg ) = $self->TicketObj->SetPriority( $self->{'prio'} );
+            ( $val, $msg ) = $ticket->SetPriority( $self->{'prio'} );
         }
         unless ($val) {
             $RT::Logger->debug( $self . " $msg\n" );
