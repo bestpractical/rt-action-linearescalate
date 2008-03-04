@@ -114,16 +114,24 @@ sub Prepare {
     my $self = shift;
 
     my $ticket = $self->TicketObj;
-    if ( $ticket->Priority >= $ticket->FinalPriority ) {
-        # no update necessary.
-        return 1;
-    }
-
-    # TODO: compute the number of business days until the ticket is due
 
     # If we don't have a due date, get out
     my $due = $ticket->DueObj->Unix;
     return 1 unless $due > 0;
+
+    my $priority_range = $ticket->FinalPriority - $ticket->InitialPriority;
+    # equal or undefined
+    return 1 unless $priority_range;
+
+    if ( $ticket->Priority >= $ticket->FinalPriority && $priority_range > 0 ) {
+        # no update necessary.
+        return 1;
+    }
+    elsif ( $ticket->Priority <= $ticket->FinalPriority && $priority_range < 0 ) {
+        return 1;
+    }
+
+    # TODO: compute the number of business days until the ticket is due
 
     # now we know we have a due date. for every day that passes,
     # increment priority according to the formula
