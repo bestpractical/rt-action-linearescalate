@@ -2,7 +2,7 @@
 package Module::Install::RTx;
 use Module::Install::Base; @ISA = qw(Module::Install::Base);
 
-$Module::Install::RTx::VERSION = '0.10';
+$Module::Install::RTx::VERSION = '0.11';
 
 use strict;
 use FindBin;
@@ -40,7 +40,7 @@ sub RTx {
         until ( eval { require RT; $RT::LocalPath } ) {
             warn "Cannot find the location of RT.pm that defines \$RT::LocalPath in: @INC\n";
             $_ = $self->prompt("Path to your RT.pm:") or exit;
-            push @INC, $_, "$_/rt3/lib", "$_/lib/rt3";
+            push @INC, $_, "$_/rt3/lib", "$_/lib/rt3", "$_/lib";
         }
     }
 
