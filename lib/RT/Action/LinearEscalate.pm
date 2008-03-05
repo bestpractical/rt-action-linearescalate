@@ -65,7 +65,7 @@ To install this package run:
     perl Makefile.PL
     make install
 
-=head1 CONFIGURATION
+=head1 USAGE
 
 Once the ScripAction is installed, the following script in "cron" 
 will get tickets to where they need to be:
@@ -73,6 +73,17 @@ will get tickets to where they need to be:
     rt-crontool --search RT::Search::FromSQL --search-arg \
     "(Status='new' OR Status='open' OR Status = 'stalled')" \
     --action RT::Action::LinearEscalate
+
+The Starts date is associated with intial ticket's priority or
+the Created field if the former is not set. End of interval is
+the Due date. Tickets without due date B<are not updated>.
+
+=head1 CONFIGURATION
+
+Initial and Final priorities are controlled by queue's options
+and can be defined using the web UI via Configuration tab. This
+action should handle correctly situations when initial priority
+is greater than final.
 
 LinearEscalate's behavior can be controlled by two options:
 
@@ -113,6 +124,7 @@ update.
 
 package RT::Action::LinearEscalate;
 
+use v5.8.3;
 use strict;
 use warnings;
 use base qw(RT::Action::Generic);
@@ -253,3 +265,11 @@ eval "require RT::Action::LinearEscalate_Local";
 die $@ if ( $@ && $@ !~ qr{^Can't locate RT/Action/LinearEscalate_Local.pm} );
 
 1;
+
+=head1 AUTHORS
+
+Kevin Riggle E<lt>kevinr@bestpractical.comE<gt>
+
+Ruslan Zakirov E<lt>ruz@bestpractical.comE<gt>
+
+=cut
