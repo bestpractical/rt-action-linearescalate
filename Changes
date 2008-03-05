@@ -1,3 +1,8 @@
+0.05 Wed Mar 05 00:15:00 UTC 2007
+
+ * support for situations when final priority is lower than initial
+ * use starts date if it's defined
+ * don't update priority if we havn't reached starts(created) date
 
 0.05 Tue Nov 21 09:52:57 EST 2006
 
